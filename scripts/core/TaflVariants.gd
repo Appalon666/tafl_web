@@ -11,22 +11,40 @@ const GameStateScript = preload("res://scripts/core/GameState.gd")
 # escape:        "corner" — король бежит в угол | "edge" — на любую кромку.
 # king_armed:    участвует ли король во взятии (как «молот»).
 # throne_hostile:трон является «наковальней» (помогает взятию) когда пуст.
-# king_capture:  "surround4" — король взят, если окружён с 4 ортогональных сторон.
+# king_capture:  как берётся король (реализация — RulesEngine._king_captured):
+#                  "surround4"  — сильный король: окружить со всех 4 сторон,
+#                                 у кромки взять нельзя (Fetlar/Copenhagen);
+#                  "custodial2" — слабый король: зажать с 2 сторон, как фигуру;
+#                                 при throne_hostile=true у трона нужно полное
+#                                 окружение (Tablut 4/3/2; Brandubh — всегда 2).
 const VARIANTS := {
 	"brandubh": {
+		# §1: углы враждебны, трон НЕ враждебен, король вооружён, берётся с 2 сторон.
 		"size": 7, "escape": "corner", "king_armed": true,
-		"throne_hostile": true, "king_capture": "surround4",
+		"throne_hostile": false, "king_capture": "custodial2",
 		"label_ru": "Брандуб 7×7", "label_en": "Brandubh 7×7",
 	},
 	"tablut": {
+		# §1: edge-escape, король вооружён; взятие локальное 4/3/2 (custodial2 +
+		# эскалация у враждебного трона).
 		"size": 9, "escape": "edge", "king_armed": true,
-		"throne_hostile": true, "king_capture": "surround4",
+		"throne_hostile": true, "king_capture": "custodial2",
 		"label_ru": "Таблут 9×9", "label_en": "Tablut 9×9",
 	},
 	"fetlar": {
 		"size": 11, "escape": "corner", "king_armed": true,
 		"throne_hostile": true, "king_capture": "surround4",
 		"label_ru": "Фетлар 11×11", "label_en": "Fetlar 11×11",
+	},
+	"copenhagen": {
+		# Современный турнирный стандарт (§9.3). Расстановка идентична Fetlar,
+		# отличия — в правилах. repetition: вечный повтор = поражение белых
+		# (защитников). shieldwall/exit_fort/encirclement активируются на Этапе 3.
+		"size": 11, "escape": "corner", "king_armed": true,
+		"throne_hostile": true, "king_capture": "surround4",
+		"repetition": "white_loss",
+		"shieldwall": true, "exit_fort": true, "encirclement": true,
+		"label_ru": "Копенгаген 11×11", "label_en": "Copenhagen 11×11",
 	},
 }
 
@@ -67,11 +85,13 @@ static func size_of(id: String) -> int:
 static func build_state(id: String) -> Object:
 	var v: Dictionary = get_variant(id)
 	var size: int = int(v.size)
+	# Copenhagen использует ту же стартовую позицию, что и Fetlar (§9.1).
+	var setup_id: String = "fetlar" if id == "copenhagen" else id
 	var s = GameStateScript.new()
 	s.king = (size / 2) * size + (size / 2)
-	for p in SETUP[id]["defenders"]:
+	for p in SETUP[setup_id]["defenders"]:
 		s.defenders[p[1] * size + p[0]] = true
-	for p in SETUP[id]["attackers"]:
+	for p in SETUP[setup_id]["attackers"]:
 		s.attackers[p[1] * size + p[0]] = true
 	s.turn = "attackers"
 	return s

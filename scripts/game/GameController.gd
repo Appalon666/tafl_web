@@ -6,6 +6,7 @@ const TaflBoard = preload("res://scripts/core/TaflBoard.gd")
 const TaflVariants = preload("res://scripts/core/TaflVariants.gd")
 const RulesEngine = preload("res://scripts/core/RulesEngine.gd")
 const RandomAI = preload("res://scripts/ai/RandomAI.gd")
+const TaflAI = preload("res://scripts/ai/TaflAI.gd")
 const BoardViewScript = preload("res://scripts/game/BoardView.gd")
 
 var board
@@ -28,7 +29,7 @@ func _ready() -> void:
 	var vdata: Dictionary = TaflVariants.get_variant(variant_id)
 	board = TaflBoard.new(int(vdata.size))
 	rules = RulesEngine.new(board, vdata)
-	ai = RandomAI.new()
+	ai = _make_ai(GameConfig.difficulty)
 	human_side = GameConfig.human_side
 	ai_side = "attackers" if human_side == "defenders" else "defenders"
 	state = TaflVariants.build_state(variant_id)
@@ -47,6 +48,17 @@ func _ready() -> void:
 
 	YandexSDK.gameplay_start()
 	_refresh()
+
+
+## Уровень сложности задаётся честно — глубиной/временем перебора.
+func _make_ai(difficulty: String):
+	match difficulty:
+		"easy":
+			return RandomAI.new()  # жадность на 1 ход
+		"hard":
+			return TaflAI.new(6, 4000)
+		_:  # "normal"
+			return TaflAI.new(3, 1500)
 
 
 func _refresh() -> void:

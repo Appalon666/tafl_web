@@ -10,6 +10,10 @@ var attackers: Dictionary = {}    # множество idx осаждающих 
 var defenders: Dictionary = {}    # множество idx защитников (без короля)
 var turn: String = "attackers"    # чей ход
 var moves_no_capture: int = 0     # полуходов без взятия (для ничьей)
+# Счётчик повторений позиций (для правила Copenhagen «вечный повтор = поражение
+# белых»). НЕ копируется в clone() — поиск ИИ работает на «чистой» истории, чтобы
+# гипотетические ветки перебора не считались повторами реальной партии.
+var position_counts: Dictionary = {}
 
 
 func clone():
@@ -20,6 +24,13 @@ func clone():
 	s.turn = turn
 	s.moves_no_capture = moves_no_capture
 	return s
+
+
+## Канонический ключ позиции (фигуры + чей ход) для детекта повторений.
+func position_key() -> String:
+	var a: Array = attackers.keys(); a.sort()
+	var d: Array = defenders.keys(); d.sort()
+	return "%d|%s|%s|%s" % [king, str(a), str(d), turn]
 
 
 func is_occupied(idx: int) -> bool:
