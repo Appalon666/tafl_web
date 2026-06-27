@@ -1,0 +1,26 @@
+# Design notes (local only)
+tafl-content.txt
+
+# Godot 4+ engine files
+.godot/
+/android/
+/builds/
+/exports/
+export_presets.cfg
+
+# Godot import cache (legacy 3.x, harmless to keep)
+.import/
+
+# Branding art, bug shots, generated promo screenshots, web build (local only)
+assets/branding/
+BUGS/
+screenshots/
+build_web/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.idea/
+.vscode/
