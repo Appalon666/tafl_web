@@ -14,6 +14,7 @@ export_presets.cfg
 # Branding art, bug shots, generated promo screenshots, web build (local only)
 assets/branding/
 BUGS/
+bugs/
 screenshots/
 build_web/
 

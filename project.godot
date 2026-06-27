@@ -1,0 +1,35 @@
+; Engine configuration file.
+; Tafl (Hnefatafl) — web project.
+
+config_version=5
+
+[application]
+
+config/name="Tafl"
+config/description="Тафл (Hnefatafl) — скандинавская асимметричная стратегия."
+run/main_scene="res://scenes/Main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://icon.svg"
+
+[autoload]
+
+GameConfig="*res://scripts/systems/GameConfig.gd"
+Settings="*res://scripts/systems/Settings.gd"
+YandexSDK="*res://scripts/systems/YandexSDK.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[internationalization]
+
+locale/translations=PackedStringArray("res://localization/translations.ru.translation", "res://localization/translations.en.translation")
+locale/fallback="ru"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
