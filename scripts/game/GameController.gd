@@ -131,6 +131,10 @@ func _end_game(winner: String) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# Быстрый рестарт по R (для теста скелета).
-	if event is InputEventKey and event.pressed and event.keycode == KEY_R:
-		get_tree().reload_current_scene()
+	if event is InputEventKey and event.pressed:
+		# Быстрый рестарт по R (для теста скелета).
+		if event.keycode == KEY_R:
+			get_tree().reload_current_scene()
+		# ESC — выход в главное меню.
+		elif event.keycode == KEY_ESCAPE:
+			get_tree().change_scene_to_file("res://scenes/ui/MainMenu.tscn")
