@@ -1,0 +1,63 @@
+<!--
+  Yandex Games SDK — head_include для веб-экспорта Godot.
+  Вставить ЦЕЛИКОМ (одной строкой, без переносов) в:
+    export_presets.cfg → [preset.N.options] → html/head_include="..."
+  (export_presets.cfg в .gitignore, поэтому держим сниппет здесь.)
+
+  Отдаёт глобальный объект window.RZ и хелперы window.RZ_*, которые
+  опрашивает scripts/systems/YandexSDK.gd. Ключевое: реклама выставляет
+  window.RZ.adv = 'open'|'close'|'error' — по этому флагу GDScript ставит
+  и снимает паузу геймплея/звука (требование Яндекс.Игр 4.7).
+
+  Ниже — читаемая (отформатированная) версия. Для вставки в head_include
+  сожми в одну строку.
+-->
+<script src="https://yandex.ru/games/sdk/v2"></script>
+<script>
+window.RZ = {
+  ready: false, sdk: null, player: null, lang: "",
+  loadResult: null, loadPending: false, adv: "", reward: ""
+};
+
+(function () {
+  function boot() {
+    if (typeof YaGames === "undefined") { setTimeout(boot, 80); return; }
+    YaGames.init().then(function (sdk) {
+      window.RZ.sdk = sdk;
+      window.RZ.ready = true;
+      try { sdk.features.LoadingAPI.ready(); } catch (e) {}
+      try { window.RZ.lang = (sdk.environment && sdk.environment.i18n) ? sdk.environment.i18n.lang : ""; } catch (e) {}
+      sdk.getPlayer({ scopes: false })
+        .then(function (p) { window.RZ.player = p; })
+        .catch(function () { window.RZ.player = null; });
+    }).catch(function (e) { console.log("YSDK init error", e); });
+  }
+  boot();
+})();
+
+window.RZ_gameplayStart = function () { try { window.RZ.sdk.features.GameplayAPI.start(); } catch (e) {} };
+window.RZ_gameplayStop  = function () { try { window.RZ.sdk.features.GameplayAPI.stop();  } catch (e) {} };
+
+window.RZ_save = function (j) { try { window.RZ.player.setData({ data: JSON.parse(j) }, true); } catch (e) {} };
+window.RZ_load = function () {
+  window.RZ.loadResult = null; window.RZ.loadPending = true;
+  try {
+    window.RZ.player.getData(["data"]).then(function (d) {
+      window.RZ.loadResult = JSON.stringify((d && d.data) ? d.data : {});
+      window.RZ.loadPending = false;
+    }).catch(function () { window.RZ.loadResult = "{}"; window.RZ.loadPending = false; });
+  } catch (e) { window.RZ.loadResult = "{}"; window.RZ.loadPending = false; }
+};
+
+// Реклама-вставка. Колбэки выставляют флаг adv — GDScript по нему ставит паузу (4.7).
+window.RZ_interstitial = function () {
+  window.RZ.adv = "";
+  try {
+    window.RZ.sdk.adv.showFullscreenAdv({ callbacks: {
+      onOpen:  function () { window.RZ.adv = "open";  },
+      onClose: function () { window.RZ.adv = "close"; },
+      onError: function () { window.RZ.adv = "error"; }
+    }});
+  } catch (e) { window.RZ.adv = "error"; }
+};
+</script>
