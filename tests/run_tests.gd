@@ -8,6 +8,7 @@ const TaflVariants = preload("res://scripts/core/TaflVariants.gd")
 const RulesEngine = preload("res://scripts/core/RulesEngine.gd")
 const GameState = preload("res://scripts/core/GameState.gd")
 const TaflAI = preload("res://scripts/ai/TaflAI.gd")
+const TutorialLessons = preload("res://scripts/game/TutorialLessons.gd")
 
 var _passed := 0
 var _failed := 0
@@ -20,6 +21,12 @@ func _init() -> void:
 	test_stage2_copenhagen()
 	test_stage3_advanced()
 	test_stage4_ai()
+	test_stage5_threats()
+	test_stage6_tutorial()
+	test_stage7_progress()
+	test_stage8_rating()
+	test_stage9_achievements()
+	test_stage10_difficulty()
 	_summary()
 	quit(0 if _failed == 0 else 1)
 
@@ -372,3 +379,216 @@ func test_stage4_ai() -> void:
 			legal = true
 			break
 	_ok(mv != null and legal, "ИИ: возвращает легальный ход на старте Brandubh")
+
+
+# ---------------------------------------------------------------- ЭТАП 5
+
+func test_stage5_threats() -> void:
+	_section_begin("Этап 5: подсветка угроз (threatened_pieces)")
+
+	# Вариант со слабым королём (custodial2), быстрый перебор на 7×7.
+	var v2 := {"king_capture": "custodial2", "throne_hostile": false,
+		"king_armed": true, "escape": "corner"}
+	var r = _mk_rules(7, v2)
+	var d33: int = 3 * 7 + 3  # клетка (3,3)
+
+	# --- защитник под боем: наковальня (2,3) на месте, осаждающий (4,6)->(4,3)
+	# замкнёт зажим (3,3) следующим ходом → (3,3) в угрозах.
+	var s = _mk_state(7, [3, 0], [[2, 3], [4, 6]], [[3, 3]])
+	var thr: Array = r.threatened_pieces(s, "defenders")
+	_ok(thr.has(d33) and thr.size() == 1, "угроза: защитник под будущим зажимом отмечен")
+
+	# --- без наковальни угрозы нет: убрали осаждающего (2,3).
+	s = _mk_state(7, [3, 0], [[4, 6]], [[3, 3]])
+	thr = r.threatened_pieces(s, "defenders")
+	_ok(thr.is_empty(), "угроза: нет наковальни → защитник не под боем")
+
+	# --- король под боем: (2,3) наковальня, (4,6)->(4,3) замыкает custodial2 короля.
+	s = _mk_state(7, [3, 3], [[2, 3], [4, 6]], [])
+	thr = r.threatened_pieces(s, "defenders")
+	_ok(thr.has(d33), "угроза: король под будущим кустодиальным взятием отмечен")
+
+	# --- симметрия: осаждающий под боем у защитников.
+	# Осаждающий (3,3), защитник-наковальня (2,3), защитник (4,6)->(4,3) замкнёт.
+	s = _mk_state(7, [0, 0], [[3, 3]], [[2, 3], [4, 6]])
+	thr = r.threatened_pieces(s, "attackers")
+	_ok(thr.has(d33), "угроза: осаждающий под будущим зажимом отмечен")
+
+	# --- threatened_pieces не мутирует исходное состояние (работает на клонах).
+	s = _mk_state(7, [3, 0], [[2, 3], [4, 6]], [[3, 3]])
+	r.threatened_pieces(s, "defenders")
+	_ok(s.king == 3 and s.defenders.size() == 1 and s.defenders.has(d33)
+		and s.attackers.size() == 2 and s.turn == "attackers",
+		"угроза: расчёт на клонах, исходное состояние не тронуто")
+
+
+# ---------------------------------------------------------------- ЭТАП 6
+
+func test_stage6_tutorial() -> void:
+	_section_begin("Этап 6: уроки обучения решаемы")
+
+	var lessons: Array = TutorialLessons.all()
+	_ok(lessons.size() >= 5, "обучение: минимум 5 уроков")
+
+	for L in lessons:
+		var c: Dictionary = TutorialLessons.compiled(L)
+		var nm: String = String(c.title)
+		var b = TaflBoard.new(int(c.size))
+		var r = RulesEngine.new(b, c.variant)
+		var s = TutorialLessons.build_state(c)
+
+		# Подсказываемая фигура принадлежит ходящей стороне.
+		_ok(s.side_at(int(c.hint_from)) == String(c.turn),
+			"урок '%s': hint_from — фигура ходящей стороны" % nm)
+
+		# Эталонный ход легален и совпадает с подсветкой-целью.
+		var legal: Array = r.legal_moves(s, int(c.solution.from))
+		_ok(int(c.solution.from) == int(c.hint_from) and legal.has(int(c.solution.to)),
+			"урок '%s': решение — легальный ход подсвеченной фигуры" % nm)
+		_ok(c.hint_to.size() == 1 and int(c.hint_to[0]) == int(c.solution.to),
+			"урок '%s': подсветка-цель совпадает с решением" % nm)
+
+		# Применение эталонного хода достигает цели урока.
+		var caps: Array = r.apply(s, {"from": int(c.solution.from), "to": int(c.solution.to)})
+		_ok(TutorialLessons.goal_met(r, s, c, int(c.solution.to), caps),
+			"урок '%s': эталонный ход достигает цели" % nm)
+
+
+# ---------------------------------------------------------------- ЭТАП 7
+
+func test_stage7_progress() -> void:
+	_section_begin("Этап 7: разблокировка режимов по прохождению")
+
+	var ProgressScript = preload("res://scripts/systems/Progress.gd")
+	var p = ProgressScript.new()
+	p.autosave = false  # не писать на диск во время тестов
+
+	# Старт: открыт только первый режим.
+	_ok(p.is_unlocked("brandubh"), "старт: brandubh открыт")
+	_ok(not p.is_unlocked("tablut"), "старт: tablut закрыт")
+	_ok(not p.is_unlocked("copenhagen"), "старт: copenhagen закрыт")
+
+	# Лёгкий уровень не засчитывается.
+	_ok(p.mark_completed("brandubh", "easy") == "", "easy: прохождение не засчитано")
+	_ok(not p.is_unlocked("tablut"), "easy: tablut всё ещё закрыт")
+
+	# Обычный открывает следующий режим.
+	_ok(p.mark_completed("brandubh", "normal") == "tablut", "normal: brandubh открывает tablut")
+	_ok(p.is_unlocked("tablut"), "tablut открыт")
+	_ok(not p.is_unlocked("fetlar"), "fetlar пока закрыт")
+
+	# Повторное прохождение ничего не открывает.
+	_ok(p.mark_completed("brandubh", "normal") == "", "повтор: ничего нового не открыто")
+	_ok(p.highest_unlocked() == "tablut", "highest_unlocked = tablut")
+
+	# Сложный тоже засчитывается; цепочка доходит до последнего.
+	_ok(p.mark_completed("tablut", "hard") == "fetlar", "hard: tablut открывает fetlar")
+	p.mark_completed("fetlar", "normal")
+	_ok(p.is_unlocked("copenhagen"), "copenhagen открыт после fetlar")
+	_ok(p.mark_completed("copenhagen", "normal") == "", "последний режим: открывать нечего")
+
+	p.free()
+
+
+# ---------------------------------------------------------------- ЭТАП 8
+
+func test_stage8_rating() -> void:
+	_section_begin("Этап 8: рейтинг — очки за победы")
+
+	var ProgressScript = preload("res://scripts/systems/Progress.gd")
+	var p = ProgressScript.new()
+	p.autosave = false  # без записи на диск
+
+	# Лёгкий не приносит очков.
+	_ok(p.add_win("brandubh", "easy") == 0, "easy: 0 очков")
+	_ok(p.score == 0, "easy: счёт не изменился")
+
+	# Вес режима (1..4) × вес сложности (normal=2, hard=3).
+	_ok(p.add_win("brandubh", "normal") == 2, "brandubh+normal = 1×2 = 2")
+	_ok(p.add_win("copenhagen", "hard") == 12, "copenhagen+hard = 4×3 = 12")
+	_ok(p.score == 14, "счёт накапливается: 2+12 = 14")
+	_ok(p.add_win("tablut", "normal") == 4, "tablut+normal = 2×2 = 4")
+	_ok(p.add_win("fetlar", "hard") == 9, "fetlar+hard = 3×3 = 9")
+
+	# Неизвестный режим — 0 очков.
+	_ok(p.add_win("unknown", "hard") == 0, "неизвестный режим: 0 очков")
+	_ok(p.score == 27, "итог: 14+4+9 = 27")
+
+	p.free()
+
+
+# ---------------------------------------------------------------- ЭТАП 9
+
+func test_stage9_achievements() -> void:
+	_section_begin("Этап 9: достижения")
+
+	var ProgressScript = preload("res://scripts/systems/Progress.gd")
+	var Achievements = preload("res://scripts/systems/Achievements.gd")
+	var p = ProgressScript.new()
+	p.autosave = false
+
+	# Старт: ничего не заработано.
+	_ok(Achievements.refresh(p).is_empty(), "старт: достижений нет")
+
+	# Первая победа за защитников → first_win + escape_artist.
+	p.record_game("win", "defenders", "brandubh", "normal")
+	var n1: Array = Achievements.refresh(p)
+	_ok(n1.has("first_win") and n1.has("escape_artist"), "победа за защиту: first_win + escape_artist")
+	_ok(p.achievements.has("first_win"), "достижение записано в набор")
+	_ok(Achievements.refresh(p).is_empty(), "повторный refresh: ничего нового")
+
+	# Победа за осаду на «Сложном» → besieger + hardened.
+	p.record_game("win", "attackers", "tablut", "hard")
+	var n2: Array = Achievements.refresh(p)
+	_ok(n2.has("besieger") and n2.has("hardened"), "победа за осаду/hard: besieger + hardened")
+
+	# 10 партий всего → veteran (было 2 победы, добиваем 8 поражений).
+	for i in range(8):
+		p.record_game("loss", "defenders", "brandubh", "normal")
+	_ok(Achievements.refresh(p).has("veteran"), "10 партий: veteran")
+
+	# Победы во всех 4 режимах → all_modes (есть brandubh, tablut; добавляем fetlar, copenhagen).
+	p.record_game("win", "defenders", "fetlar", "normal")
+	p.record_game("win", "defenders", "copenhagen", "normal")
+	_ok(Achievements.refresh(p).has("all_modes"), "победы во всех режимах: all_modes")
+
+	# Обучение → scholar.
+	p.mark_tutorial_done()
+	_ok(Achievements.refresh(p).has("scholar"), "обучение пройдено: scholar")
+
+	# 50 очков → champion.
+	p.score = 50
+	_ok(Achievements.refresh(p).has("champion"), "50 очков рейтинга: champion")
+
+	p.free()
+
+
+# ---------------------------------------------------------------- ЭТАП 10
+
+func test_stage10_difficulty() -> void:
+	_section_begin("Этап 10: прогрессия сложности ИИ")
+
+	var ProgressScript = preload("res://scripts/systems/Progress.gd")
+	var p = ProgressScript.new()
+	p.autosave = false
+
+	# Старт: открыт только «Лёгкий».
+	_ok(p.difficulty_unlocked("easy"), "старт: easy открыт")
+	_ok(not p.difficulty_unlocked("normal"), "старт: normal закрыт")
+	_ok(not p.difficulty_unlocked("hard"), "старт: hard закрыт")
+
+	# Поражение на easy не открывает normal.
+	p.record_game("loss", "defenders", "brandubh", "easy")
+	_ok(not p.difficulty_unlocked("normal"), "поражение на easy → normal закрыт")
+
+	# Победа на easy открывает normal.
+	p.record_game("win", "defenders", "brandubh", "easy")
+	_ok(p.difficulty_unlocked("normal"), "победа на easy → normal открыт")
+	_ok(not p.difficulty_unlocked("hard"), "hard ещё закрыт")
+
+	# Победа на normal открывает hard.
+	p.record_game("win", "defenders", "brandubh", "normal")
+	_ok(p.difficulty_unlocked("hard"), "победа на normal → hard открыт")
+	_ok(p.highest_difficulty() == "hard", "highest_difficulty = hard")
+
+	p.free()

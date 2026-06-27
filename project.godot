@@ -21,6 +21,7 @@ config/icon="res://icon.svg"
 GameConfig="*res://scripts/systems/GameConfig.gd"
 Settings="*res://scripts/systems/Settings.gd"
 YandexSDK="*res://scripts/systems/YandexSDK.gd"
+Progress="*res://scripts/systems/Progress.gd"
 
 [display]
 

@@ -15,10 +15,16 @@ extends Node
 ##  4) Реклама-вставка между логическими паузами: YandexSDK.show_interstitial().
 
 signal cloud_loaded(data: Dictionary)
+signal leaderboard_loaded(entries: Array)
+signal auth_changed(authorized: bool)
+signal sdk_ready  # SDK инициализировался и доступен (available стал true)
+
+## Технический идентификатор лидерборда в кабинете Яндекс.Игр.
+const LEADERBOARD_NAME := "rating"
 
 const SAVE_DEBOUNCE := 4.0
-## Список user://*.json для синка в облако. Заполнить под свой проект.
-const SAVE_FILES: Array[String] = []
+## Файлы для синка в облако Яндекса. Прогресс игрока (разблокировка режимов).
+const SAVE_FILES: Array[String] = ["user://progress.cfg"]
 ## Страховка: если реклама зависла без onClose/onError — снять паузу принудительно.
 const AD_MAX_SECONDS := 45.0
 
@@ -30,6 +36,8 @@ var _has_pending := false
 var _save_timer := 0.0
 var _ad_open := false
 var _ad_timeout := 0.0
+var _waiting_lb := false
+var _waiting_auth := false
 
 
 func _ready() -> void:
@@ -53,10 +61,13 @@ func _process(delta: float) -> void:
 			available = true
 			_apply_platform_lang()
 			request_cloud_load()
+			sdk_ready.emit()
 		return
 	_tick_ad(delta)
 	_tick_save(delta)
 	_tick_cloud_load()
+	_tick_leaderboard()
+	_tick_auth()
 
 
 # ---------------------------------------------------------------- public API
@@ -89,6 +100,31 @@ func request_cloud_load() -> void:
 	if available and _win != null:
 		_waiting_cloud = true
 		_win.RZ_load()
+
+
+## Отправить рейтинг игрока в лидерборд (4.x — только целое число).
+func submit_score(value: int) -> void:
+	if available and _win != null:
+		_win.RZ_setScore(value)
+
+
+## Запросить записи лидерборда; результат придёт сигналом leaderboard_loaded.
+func request_leaderboard() -> void:
+	if available and _win != null:
+		_waiting_lb = true
+		_win.RZ_getLeaderboard()
+
+
+## Авторизован ли игрок в профиле Яндекса (нужно для записи в лидерборд и PvP).
+func is_authorized() -> bool:
+	return available and _win != null and _js_bool("window.RZ_isAuthed()")
+
+
+## Открыть нативный диалог входа Яндекса; итог придёт сигналом auth_changed(ok).
+func prompt_auth() -> void:
+	if available and _win != null:
+		_waiting_auth = true
+		_win.RZ_auth()
 
 
 # ---------------------------------------------------------------- ads (4.7)
@@ -144,6 +180,28 @@ func _tick_cloud_load() -> void:
 		cloud_loaded.emit(data)
 
 
+func _tick_leaderboard() -> void:
+	if not _waiting_lb:
+		return
+	var lr: Variant = JavaScriptBridge.eval(
+		"(window.RZ && !window.RZ.lbPending) ? window.RZ.lbResult : null", true)
+	if lr != null and typeof(lr) == TYPE_STRING:
+		_waiting_lb = false
+		var parsed: Variant = JSON.parse_string(String(lr))
+		var entries: Array = parsed if parsed is Array else []
+		leaderboard_loaded.emit(entries)
+
+
+func _tick_auth() -> void:
+	if not _waiting_auth:
+		return
+	var st := String(JavaScriptBridge.eval("window.RZ ? (window.RZ.authReq||'') : ''", true))
+	if st == "ok" or st == "no":
+		_waiting_auth = false
+		JavaScriptBridge.eval("if(window.RZ){window.RZ.authReq='';}", true)
+		auth_changed.emit(st == "ok")
+
+
 # ---------------------------------------------------------------- cloud sync
 
 func _collect_files() -> Dictionary:
@@ -181,7 +239,10 @@ func _apply_platform_lang() -> void:
 	elif lang.begins_with("ru"):
 		code = "ru"
 	if code != "":
-		TranslationServer.set_locale(code)
+		# Через Settings — чтобы совпали и TranslationServer, и Settings.locale
+		# (от него зависят названия/описания режимов label_/desc_). Иначе у EN-
+		# аудитории UI английский, а режимы остались бы русскими (грабля FaG 8.2.3).
+		Settings.set_locale_code(code)
 
 
 func _js_bool(expr: String) -> bool:

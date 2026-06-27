@@ -30,6 +30,8 @@ func _build() -> void:
 	title.text = "TAFL"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 76)
+	if Settings.title_font:  # декоративный «нордический» шрифт логотипа, если положен
+		title.add_theme_font_override("font", Settings.title_font)
 	col.add_child(title)
 
 	var sub := Label.new()
@@ -42,10 +44,20 @@ func _build() -> void:
 	col.add_child(_gap(24))
 
 	col.add_child(_button(tr("Играть"), _on_play))
+	col.add_child(_button(tr("Как играть"), _on_tutorial))       # M2 — онбординг
+	col.add_child(_button(tr("Таблица лидеров"), _on_leaderboard))  # M3 — рейтинг
+	col.add_child(_button(tr("Достижения"), _on_achievements))     # M3 — ачивки
 	col.add_child(_button(tr("Настройки"), _on_settings))
-	col.add_child(_stub(tr("Как играть")))      # M2 — онбординг
-	col.add_child(_stub(tr("Достижения")))       # M3 — мета-прогрессия
 	col.add_child(_button(tr("Выход"), _on_quit))
+
+	# Текущий рейтинг игрока (накопленные очки за победы).
+	var rating := Label.new()
+	rating.text = tr("Рейтинг") + ": " + str(Progress.score)
+	rating.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rating.add_theme_font_size_override("font_size", 18)
+	rating.modulate = Color(1, 1, 1, 0.6)
+	col.add_child(_gap(8))
+	col.add_child(rating)
 
 
 func _button(text: String, cb: Callable) -> Button:
@@ -57,16 +69,6 @@ func _button(text: String, cb: Callable) -> Button:
 	return b
 
 
-## Кнопка-заглушка для ещё не готовых разделов (видна, но неактивна).
-func _stub(text: String) -> Button:
-	var b := Button.new()
-	b.text = text + "  ·  " + tr("скоро")
-	b.custom_minimum_size = Vector2(300, 52)
-	b.add_theme_font_size_override("font_size", 24)
-	b.disabled = true
-	return b
-
-
 func _gap(h: int) -> Control:
 	var c := Control.new()
 	c.custom_minimum_size = Vector2(0, h)
@@ -75,6 +77,18 @@ func _gap(h: int) -> Control:
 
 func _on_play() -> void:
 	get_tree().change_scene_to_file("res://scenes/ui/ModeSelect.tscn")
+
+
+func _on_tutorial() -> void:
+	get_tree().change_scene_to_file("res://scenes/Tutorial.tscn")
+
+
+func _on_leaderboard() -> void:
+	get_tree().change_scene_to_file("res://scenes/ui/Leaderboard.tscn")
+
+
+func _on_achievements() -> void:
+	get_tree().change_scene_to_file("res://scenes/ui/Achievements.tscn")
 
 
 func _on_settings() -> void:

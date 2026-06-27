@@ -16,7 +16,8 @@
 <script>
 window.RZ = {
   ready: false, sdk: null, player: null, lang: "",
-  loadResult: null, loadPending: false, adv: "", reward: ""
+  loadResult: null, loadPending: false, adv: "", reward: "",
+  lb: null, lbResult: null, lbPending: false, authReq: ""
 };
 
 (function () {
@@ -30,6 +31,9 @@ window.RZ = {
       sdk.getPlayer({ scopes: false })
         .then(function (p) { window.RZ.player = p; })
         .catch(function () { window.RZ.player = null; });
+      sdk.getLeaderboards()
+        .then(function (lb) { window.RZ.lb = lb; })
+        .catch(function () { window.RZ.lb = null; });
     }).catch(function (e) { console.log("YSDK init error", e); });
   }
   boot();
@@ -47,6 +51,41 @@ window.RZ_load = function () {
       window.RZ.loadPending = false;
     }).catch(function () { window.RZ.loadResult = "{}"; window.RZ.loadPending = false; });
   } catch (e) { window.RZ.loadResult = "{}"; window.RZ.loadPending = false; }
+};
+
+// Авторизация. RZ_isAuthed — вошёл ли игрок (lite = аноним). RZ_auth открывает
+// диалог входа Яндекса и переполучает игрока; результат — в authReq (ok|no).
+window.RZ_isAuthed = function () {
+  try { return !!(window.RZ.player && window.RZ.player.getMode() !== "lite"); } catch (e) { return false; }
+};
+window.RZ_auth = function () {
+  window.RZ.authReq = "pending";
+  try {
+    window.RZ.sdk.auth.openAuthDialog()
+      .then(function () { return window.RZ.sdk.getPlayer({ scopes: true }); })
+      .then(function (p) { window.RZ.player = p; window.RZ.authReq = "ok"; })
+      .catch(function () { window.RZ.authReq = "no"; });
+  } catch (e) { window.RZ.authReq = "no"; }
+};
+
+// Лидерборд "rating". setScore принимает целое; getLeaderboard кладёт JSON-массив
+// записей [{rank, score, name}] в lbResult (GDScript опрашивает lbPending).
+window.RZ_setScore = function (v) {
+  // setLeaderboardScore требует авторизации (SDK) — у анонима не зовём.
+  try { if (window.RZ.lb && window.RZ_isAuthed()) window.RZ.lb.setLeaderboardScore("rating", v); } catch (e) {}
+};
+window.RZ_getLeaderboard = function () {
+  window.RZ.lbResult = null; window.RZ.lbPending = true;
+  try {
+    window.RZ.lb.getLeaderboardEntries("rating", { includeUser: true, quantityTop: 10, quantityAround: 3 })
+      .then(function (res) {
+        window.RZ.lbResult = JSON.stringify((res && res.entries ? res.entries : []).map(function (e) {
+          return { rank: e.rank, score: e.score, name: (e.player && e.player.publicName) ? e.player.publicName : "" };
+        }));
+        window.RZ.lbPending = false;
+      })
+      .catch(function () { window.RZ.lbResult = "[]"; window.RZ.lbPending = false; });
+  } catch (e) { window.RZ.lbResult = "[]"; window.RZ.lbPending = false; }
 };
 
 // Реклама-вставка. Колбэки выставляют флаг adv — GDScript по нему ставит паузу (4.7).

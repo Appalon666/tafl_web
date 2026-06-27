@@ -62,6 +62,22 @@ func _pieces_of(state, side: String) -> Array:
 	return out
 
 
+# ---------------------------------------------------------------- анализ угроз
+
+## Клетки фигур стороны `side`, которые противник может взять СВОИМ ближайшим
+## ходом (custodial / shieldwall / окружение короля). Для подсветки угроз в UI.
+## Перебирает все ходы противника на клоне состояния и собирает взятия.
+func threatened_pieces(state, side: String) -> Array:
+	var foe: String = "attackers" if side == "defenders" else "defenders"
+	var hits: Dictionary = {}
+	for mv in moves_for_side(state, foe):
+		var c = state.clone()
+		c.turn = foe
+		for cap in apply(c, mv):
+			hits[cap] = true
+	return hits.keys()
+
+
 # ---------------------------------------------------------------- применение хода
 
 ## Применяет ход (мутирует state), возвращает список взятых клеток. Переключает ход.

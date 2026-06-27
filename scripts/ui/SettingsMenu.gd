@@ -3,10 +3,20 @@ extends Control
 
 const COL_BG := Color(0.09, 0.11, 0.14)
 
+var col: VBoxContainer
+
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build()
+	get_viewport().size_changed.connect(_relayout)
+	_relayout()
+
+
+func _relayout() -> void:
+	if col == null:
+		return
+	col.custom_minimum_size.x = minf(get_viewport_rect().size.x - 24.0, 520.0)
 
 
 func _build() -> void:
@@ -20,8 +30,7 @@ func _build() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 
-	var col := VBoxContainer.new()
-	col.custom_minimum_size = Vector2(520, 0)
+	col = VBoxContainer.new()
 	col.add_theme_constant_override("separation", 10)
 	center.add_child(col)
 
